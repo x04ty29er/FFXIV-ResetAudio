@@ -1,14 +1,11 @@
 ﻿using Dalamud.Game;
-using Dalamud.Game.ClientState;
-using Dalamud.Game.Command;
-using Dalamud.Game.Gui;
 using Dalamud.Hooking;
-using Dalamud.Interface;
+using Dalamud.Interface.Utility;
 using Dalamud.IoC;
-using Dalamud.Logging;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Ipc;
 using Dalamud.Plugin.Ipc.Exceptions;
+using Dalamud.Plugin.Services;
 using ImGuiNET;
 using System;
 using System.Collections.Generic;
@@ -96,8 +93,7 @@ namespace ResetAudio {
                 "48 8b 05 ?? ?? ?? ??"                  , // MOV rax, [ffxiv_dx11.exe+0x1EF5AB0]
                 "48 33 c4"                              , // XOR rax, rsp
                 "48 89 85 ?? ?? ?? ??"                  , // MOV [rbp+0x4e0], rax
-                "48 8b d9"                              , // MOV rbx, rcx
-                "48 8b 0d ?? ?? ?? ??"                  , // MOV rac, [ffxiv_dx11.exe+0x1F12FD8]
+                "48 8b 05 ?? ?? ?? ??"                  , // MOV rac, [ffxiv_dx11.exe+0x1F12FD8]
                 "49 8b f8"                              , // MOV rdi, r8
                 "44 0f b6 f2"                           , // MOVZX r14d, dl
             });
@@ -136,9 +132,10 @@ namespace ResetAudio {
         private readonly string SlashCommandHelpMessage = "Manually trigger game audio reset.\n* /resetaudio (r|reset): Reset audio right now.\n* /resetaudio (h|harder): Completely reloads audio.\n* /resetaudio c|configure: Open ResetAudio configuration window.\n* /resetaudio h|help: Print help message.";
 
         private readonly DalamudPluginInterface _pluginInterface;
-        private readonly CommandManager _commandManager;
-        private readonly ChatGui _chatGui;
-        private readonly Framework _framework;
+        private readonly ICommandManager _commandManager;
+        private readonly IChatGui _chatGui;
+        private readonly IFramework _framework;
+        private readonly IPluginLog _pluginLog;
         private readonly Configuration _config;
 
         private readonly List<Tuple<IDisposable?, Action?>> _disposableList = new();
@@ -187,16 +184,18 @@ namespace ResetAudio {
 
         public Plugin(
             [RequiredVersion("1.0")] DalamudPluginInterface pluginInterface,
-            [RequiredVersion("1.0")] CommandManager commandManager,
-            [RequiredVersion("1.0")] ClientState clientState,
-            [RequiredVersion("1.0")] ChatGui chatGui,
-            [RequiredVersion("1.0")] Framework framework,
-            [RequiredVersion("1.0")] SigScanner sigScanner) {
+            [RequiredVersion("1.0")] ICommandManager commandManager,
+            [RequiredVersion("1.0")] IClientState clientState,
+            [RequiredVersion("1.0")] IChatGui chatGui,
+            [RequiredVersion("1.0")] IFramework framework,
+            [RequiredVersion("1.0")] IPluginLog pluginLog,
+            [RequiredVersion("1.0")] ISigScanner sigScanner) {
             try {
                 _pluginInterface = pluginInterface;
                 _commandManager = commandManager;
                 _chatGui = chatGui;
                 _framework = framework;
+                _pluginLog = pluginLog;
 
                 _disposableList.Add(Tuple.Create<IDisposable?, Action?>(_disposeToken = new(), null));
 
@@ -214,40 +213,40 @@ namespace ResetAudio {
                 var pAudioRenderClientThreadBody = sigScanner.ScanText(MemorySignatures.AudioRenderClientThreadBody);
                 var pOpBase = pAudioRenderClientThreadBody + 0x2C;
                 _phAudioRenderClientThreadExitEvent = (IntPtr*)(pOpBase + Marshal.ReadInt32(pOpBase - 0x04));
-                PluginLog.Verbose($"phAudioRenderClientThreadExitEvent: {MainModuleRva((IntPtr)_phAudioRenderClientThreadExitEvent)}");
+                _pluginLog.Verbose($"phAudioRenderClientThreadExitEvent: {MainModuleRva((IntPtr)_phAudioRenderClientThreadExitEvent)}");
 
                 var pfn = sigScanner.ScanText(MemorySignatures.MainAudioClass_Construct);
                 _pfnMainAudioClass_Construct = Marshal.GetDelegateForFunctionPointer<MainAudioClass_Construct>(pfn);
-                PluginLog.Verbose($"MainAudioClass_Construct: {MainModuleRva(pfn)}");
+                _pluginLog.Verbose($"MainAudioClass_Construct: {MainModuleRva(pfn)}");
 
                 pfn = sigScanner.ScanText(MemorySignatures.MainAudioClass_Initialize);
                 _pfnMainAudioClass_Initialize = Marshal.GetDelegateForFunctionPointer<MainAudioClass_Initialize>(pfn);
-                PluginLog.Verbose($"MainAudioClass_Initialize: {MainModuleRva(pfn)}");
+                _pluginLog.Verbose($"MainAudioClass_Initialize: {MainModuleRva(pfn)}");
 
                 pfn = sigScanner.ScanText(MemorySignatures.MainAudioClass_Cleanup);
                 _pfnMainAudioClass_Cleanup = Marshal.GetDelegateForFunctionPointer<MainAudioClass_Cleanup>(pfn);
-                PluginLog.Verbose($"MainAudioClass_Cleanup: {MainModuleRva(pfn)}");
+                _pluginLog.Verbose($"MainAudioClass_Cleanup: {MainModuleRva(pfn)}");
 
                 pfn = sigScanner.ScanText(MemorySignatures.MainAudioClass_SetStaticAddr2);
                 _pfnMainAudioClass_SetStaticAddr2 = Marshal.GetDelegateForFunctionPointer<MainAudioClass_SetStaticAddr2>(pfn);
-                PluginLog.Verbose($"MainAudioClass_SetStaticAddr2: {MainModuleRva(pfn)}");
+                _pluginLog.Verbose($"MainAudioClass_SetStaticAddr2: {MainModuleRva(pfn)}");
                 pOpBase = pfn + 0x39;
                 _ppMainAudioClass = (IntPtr**)(pOpBase + Marshal.ReadInt32(pOpBase - 0x04));
-                PluginLog.Verbose($"ppMainAudioClass: {MainModuleRva((IntPtr)_ppMainAudioClass)}");
-                PluginLog.Verbose($"*ppMainAudioClass: {MainModuleRva((IntPtr)(*_ppMainAudioClass))}");
-                PluginLog.Verbose($"**ppMainAudioClass: {MainModuleRva(**_ppMainAudioClass)}");
+                _pluginLog.Verbose($"ppMainAudioClass: {MainModuleRva((IntPtr)_ppMainAudioClass)}");
+                _pluginLog.Verbose($"*ppMainAudioClass: {MainModuleRva((IntPtr)(*_ppMainAudioClass))}");
+                _pluginLog.Verbose($"**ppMainAudioClass: {MainModuleRva(**_ppMainAudioClass)}");
 
                 var pInitXivAudioEnumerator = sigScanner.ScanText(MemorySignatures.XivAudioEnumerator_Initialize);
                 pOpBase = pInitXivAudioEnumerator + 0x34;
                 _pNotificationClientVtbl = (IMMNotificationClientVtbl*)(pOpBase + Marshal.ReadInt32(pOpBase - 0x04));
                 _notificationClientVtblOriginalValue = *_pNotificationClientVtbl;
 
-                PluginLog.Verbose($"IMMNotificationClientVtbl: {MainModuleRva((IntPtr)_pNotificationClientVtbl)}");
-                PluginLog.Verbose($"OnDeviceStateChanged: {MainModuleRva(_pNotificationClientVtbl->OnDeviceStateChanged)}");
-                PluginLog.Verbose($"OnDeviceAdded: {MainModuleRva(_pNotificationClientVtbl->OnDeviceAdded)}");
-                PluginLog.Verbose($"OnDeviceRemoved: {MainModuleRva(_pNotificationClientVtbl->OnDeviceRemoved)}");
-                PluginLog.Verbose($"OnDefaultDeviceChanged: {MainModuleRva(_pNotificationClientVtbl->OnDefaultDeviceChanged)}");
-                PluginLog.Verbose($"OnPropertyValueChanged: {MainModuleRva(_pNotificationClientVtbl->OnPropertyValueChanged)}");
+                _pluginLog.Verbose($"IMMNotificationClientVtbl: {MainModuleRva((IntPtr)_pNotificationClientVtbl)}");
+                _pluginLog.Verbose($"OnDeviceStateChanged: {MainModuleRva(_pNotificationClientVtbl->OnDeviceStateChanged)}");
+                _pluginLog.Verbose($"OnDeviceAdded: {MainModuleRva(_pNotificationClientVtbl->OnDeviceAdded)}");
+                _pluginLog.Verbose($"OnDeviceRemoved: {MainModuleRva(_pNotificationClientVtbl->OnDeviceRemoved)}");
+                _pluginLog.Verbose($"OnDefaultDeviceChanged: {MainModuleRva(_pNotificationClientVtbl->OnDefaultDeviceChanged)}");
+                _pluginLog.Verbose($"OnPropertyValueChanged: {MainModuleRva(_pNotificationClientVtbl->OnPropertyValueChanged)}");
 
                 _originalOnDeviceStateChanged = Marshal.GetDelegateForFunctionPointer<OnDeviceStateChangedDelegate>(_notificationClientVtblOriginalValue.OnDeviceStateChanged);
                 _originalOnDeviceAdded = Marshal.GetDelegateForFunctionPointer<OnDeviceAddedDelegate>(_notificationClientVtblOriginalValue.OnDeviceAdded);
@@ -258,7 +257,7 @@ namespace ResetAudio {
                 _pDeviceEnumerator = (IMMDeviceEnumerator)new MMDeviceEnumerator();
                 _resetAudio = (bool*)(_notificationClientVtblOriginalValue.OnDefaultDeviceChanged + 0x07 + Marshal.ReadInt32(_notificationClientVtblOriginalValue.OnDefaultDeviceChanged + 0x03));
 
-                PluginLog.Log($"ResetAudio Byte: {MainModuleRva((IntPtr)_resetAudio)}");
+                _pluginLog.Information($"ResetAudio Byte: {MainModuleRva((IntPtr)_resetAudio)}");
 
                 VirtualProtect((IntPtr)_pNotificationClientVtbl, (UIntPtr)Marshal.SizeOf<IMMNotificationClientVtbl>(), MemoryProtection.PAGE_READWRITE, out var prevMemoryProtection);
                 try {
@@ -312,7 +311,7 @@ namespace ResetAudio {
                     item.Item1?.Dispose();
                     item.Item2?.Invoke();
                 } catch (Exception e) {
-                    PluginLog.Warning(e, "{0}: Dispose failure", item);
+                    _pluginLog.Warning(e, "{0}: Dispose failure", item);
                 }
             }
             _disposableList.Clear();
@@ -328,7 +327,7 @@ namespace ResetAudio {
         private int GetBufferDetour(void* pThis, int numFramesWritten, out IntPtr dataBufferPointer) {
             var res = _getBufferHook!.Original(pThis, numFramesWritten, out dataBufferPointer);
             _pSamples = (float*)dataBufferPointer;
-            PluginLog.Information("GetBufferDetour({0:X}): {1:X}, {2:X}", (IntPtr)pThis, numFramesWritten, dataBufferPointer);
+            _pluginLog.Information("GetBufferDetour({0:X}): {1:X}, {2:X}", (IntPtr)pThis, numFramesWritten, dataBufferPointer);
             return res;
         }
 
@@ -339,7 +338,7 @@ namespace ResetAudio {
                 minv = Math.Min(minv, _pSamples[i]);
                 maxv = Math.Max(maxv, _pSamples[i]);
             }
-            PluginLog.Information("ReleaseBufferDetour({0:X}): {1:X}, {2}: {3} ~ {4}", (IntPtr)pThis, numFramesWritten, bufferFlags, minv, maxv);
+            _pluginLog.Information("ReleaseBufferDetour({0:X}): {1:X}, {2}: {3} ~ {4}", (IntPtr)pThis, numFramesWritten, bufferFlags, minv, maxv);
             return _releaseBufferHook!.Original(pThis, numFramesWritten, bufferFlags);
         }
 
@@ -489,7 +488,7 @@ namespace ResetAudio {
             _chatGui.Print(string.Format("[{0}] Completely reloading audio.\n* Your sound settings from System Settings will not take effect until you change respective options again.\n* Your background music may stop playing until it changes.\n* Part of game audio may stop working until restart.\n* Restarting the game is still recommended.", Name));
         }
 
-        private void OnFrameworkUpdate(Framework framework) {
+        private void OnFrameworkUpdate(IFramework framework) {
             if (ReconstructAudioNextActionTimestamp == null || ReconstructAudioNextActionTimestamp >= DateTime.Now)
                 return;
 
@@ -502,7 +501,7 @@ namespace ResetAudio {
 
                 SetEvent(*_phAudioRenderClientThreadExitEvent);
                 _pfnMainAudioClass_Cleanup(**_ppMainAudioClass);
-                PluginLog.Information("Cleanup");
+                _pluginLog.Information("Cleanup");
 
             } else if (ReconstructAudioStep == 1) {
                 if (_config.EnableOrchestrionIntegration) {
@@ -514,11 +513,11 @@ namespace ResetAudio {
                 }
 
                 _pfnMainAudioClass_Construct(**_ppMainAudioClass, true, false);
-                PluginLog.Information("Construct");
+                _pluginLog.Information("Construct");
                 _pfnMainAudioClass_Initialize(**_ppMainAudioClass, false, IntPtr.Zero);
-                PluginLog.Information("Initialize");
+                _pluginLog.Information("Initialize");
                 _pfnMainAudioClass_SetStaticAddr2(**_ppMainAudioClass);
-                PluginLog.Information("SetStaticAddr2");
+                _pluginLog.Information("SetStaticAddr2");
 
             } else if (ReconstructAudioStep == 2) {
                 ReconstructAudioNextActionTimestamp = DateTime.Now.AddMilliseconds(100);
@@ -568,7 +567,7 @@ namespace ResetAudio {
         }
 
         private void ResetAudioNow(DeviceResetTriggerReason reason) {
-            PluginLog.Information("Resetting audio NOW! (Reason: {0})", reason);
+            _pluginLog.Information("Resetting audio NOW! (Reason: {0})", reason);
 
             if (_config.PrintAudioResetToChat)
                 _chatGui.Print(string.Format("[{0}] Resetting audio. (Reason: {1})", Name, reason));
@@ -580,7 +579,7 @@ namespace ResetAudio {
             if (_resetAudioSoonTask != null)
                 return;
 
-            PluginLog.Information("Resetting audio SOON! (Reason: {0})", reason);
+            _pluginLog.Information("Resetting audio SOON! (Reason: {0})", reason);
 
             _resetAudioSoonTask = Task.Run(() => {
                 try {
@@ -598,22 +597,22 @@ namespace ResetAudio {
         }
 
         private int OnDeviceStateChanged(IMMNotificationClientVtbl* pNotificationClient, string deviceId, uint dwNewState) {
-            PluginLog.Information("OnDeviceStateChanged({0}, {1})", GetDeviceFriendlyName(deviceId), dwNewState);
+            _pluginLog.Information("OnDeviceStateChanged({0}, {1})", GetDeviceFriendlyName(deviceId), dwNewState);
             return _config.SuppressMultimediaDeviceChangeNotificationToGame ? 0 : _originalOnDeviceStateChanged(pNotificationClient, deviceId, dwNewState);
         }
 
         private int OnDeviceAdded(IMMNotificationClientVtbl* pNotificationClient, string deviceId) {
-            PluginLog.Information("OnDeviceAdded({0})", GetDeviceFriendlyName(deviceId));
+            _pluginLog.Information("OnDeviceAdded({0})", GetDeviceFriendlyName(deviceId));
             return _config.SuppressMultimediaDeviceChangeNotificationToGame ? 0 : _originalOnDeviceAdded(pNotificationClient, deviceId);
         }
 
         private int OnDeviceRemoved(IMMNotificationClientVtbl* pNotificationClient, string deviceId) {
-            PluginLog.Information("OnDeviceRemoved({0})", GetDeviceFriendlyName(deviceId));
+            _pluginLog.Information("OnDeviceRemoved({0})", GetDeviceFriendlyName(deviceId));
             return _config.SuppressMultimediaDeviceChangeNotificationToGame ? 0 : _originalOnDeviceRemoved(pNotificationClient, deviceId);
         }
 
         private int OnDefaultDeviceChanged(IMMNotificationClientVtbl* pNotificationClient, EDataFlow flow, ERole role, string? defaultDeviceId) {
-            PluginLog.Information("OnDefaultDeviceChanged({0}, {1}, {2})", flow, role, defaultDeviceId == null ? "<null>" : GetDeviceFriendlyName(defaultDeviceId));
+            _pluginLog.Information("OnDefaultDeviceChanged({0}, {1}, {2})", flow, role, defaultDeviceId == null ? "<null>" : GetDeviceFriendlyName(defaultDeviceId));
 
             if (defaultDeviceId != null)
                 ResetAudioSoon(DeviceResetTriggerReason.DefaultDeviceChange);
@@ -622,7 +621,7 @@ namespace ResetAudio {
         }
 
         private int OnPropertyValueChanged(IMMNotificationClientVtbl* pNotificationClient, string deviceId, PropertyKey propertyKey) {
-            PluginLog.Information("OnPropertyValueChanged({0}, {1})", GetDeviceFriendlyName(deviceId), PropertyKeyToName(propertyKey) ?? propertyKey.ToString());
+            _pluginLog.Information("OnPropertyValueChanged({0}, {1})", GetDeviceFriendlyName(deviceId), PropertyKeyToName(propertyKey) ?? propertyKey.ToString());
 
             if (IsDefaultRenderDevice(deviceId)) {
                 _propertyUpdateCount[propertyKey] = _propertyUpdateCount.GetValueOrDefault(propertyKey, 0) + 1;
@@ -648,12 +647,12 @@ namespace ResetAudio {
                     return false;
 
                 } else {
-                    PluginLog.Error(ex, "IsDefaultRenderDevice({0}): COM Error occurred", deviceId);
+                    _pluginLog.Error(ex, "IsDefaultRenderDevice({0}): COM Error occurred", deviceId);
                     return false;
                 }
 
             } catch (Exception ex) {
-                PluginLog.Error(ex, "IsDefaultRenderDevice({0}): Error occurred", deviceId);
+                _pluginLog.Error(ex, "IsDefaultRenderDevice({0}): Error occurred", deviceId);
                 return false;
 
             } finally {
@@ -666,7 +665,7 @@ namespace ResetAudio {
             try {
                 return GetDeviceProperty<string>(deviceId, PKEY_Device_FriendlyName) ?? $"Unknown({deviceId})";
             } catch (Exception ex) {
-                PluginLog.Error(ex, "GetDeviceFriendlyName({0}) failure", deviceId);
+                _pluginLog.Error(ex, "GetDeviceFriendlyName({0}) failure", deviceId);
                 return $"Unknown({deviceId})";
             }
         }

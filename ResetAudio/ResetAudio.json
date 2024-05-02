@@ -1,11 +1,11 @@
 {
-  "Author": "srkizer",
+  "Author": "x04ty29er",
   "Name": "ResetAudio",
   "Punchline": "Do not let the game shut up.",
-  "Description": "Resets game audio device on demand.",
+  "Description": "Resets game audio device on demand. Forked from https://github.com/Soreepeong/FFXIV-ResetAudio.",
   "InternalName": "resetaudio",
   "ApplicableVersion": "any",
-  "RepoUrl": "https://github.com/Soreepeong/FFXIV-ResetAudio",
+  "RepoUrl": "https://github.com/x04ty29er/FFXIV-ResetAudio",
   "Tags": [
     "audio",
     "reset"
