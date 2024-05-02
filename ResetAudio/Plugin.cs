@@ -203,6 +203,7 @@ namespace ResetAudio {
                 _config.Initialize(_pluginInterface);
 
                 _pluginInterface.UiBuilder.Draw += DrawUI;
+                _pluginInterface.UiBuilder.OpenMainUi += () => { _config.ConfigVisible = !_config.ConfigVisible; };
                 _pluginInterface.UiBuilder.OpenConfigUi += () => { _config.ConfigVisible = !_config.ConfigVisible; };
 
                 _orchPlaySong = _pluginInterface.GetIpcSubscriber<int, bool>("Orch.PlaySong");

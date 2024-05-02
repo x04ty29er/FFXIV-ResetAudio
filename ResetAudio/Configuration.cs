@@ -10,7 +10,7 @@ namespace ResetAudio {
     public class Configuration : IPluginConfiguration {
         public int Version { get; set; } = 0;
 
-        public bool ConfigVisible = true;
+        public bool ConfigVisible = false;
 
         public bool AdvanceConfigExpanded = false;
 
