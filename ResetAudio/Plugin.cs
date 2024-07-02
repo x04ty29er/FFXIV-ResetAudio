@@ -47,10 +47,11 @@ namespace ResetAudio {
                 /* 0x34 */ "48 89 43 ??"                , // MOV [rbx+0x08], rax                      // <2> Assign IMMNotificationClientVtbl
             });
 
+
             internal static readonly string AudioRenderClientThreadBody = string.Join(' ', new string[]{
                 // Function preamble
                 /* 0x00 */ "40 56"                      , // PUSH rsi
-                /* 0x02 */ "41 55"                      , // PUSH r13
+                /* 0x02 */ "41 56"                      , // PUSH r14
                 /* 0x04 */ "48 81 ec ?? ?? ?? ??"       , // SUB rsp, 0x000000A8
             
                 // Stack guard
@@ -68,17 +69,20 @@ namespace ResetAudio {
                 /* 0x27 */ "48 8b 05 ?? ?? ?? ??"       , // MOV rax, [ffxiv_dx11.exe+0x1EF6E40]
             });
 
+            // this appears to match Client::Sound::SoundManager.ctor from XIV Client Structs
             internal static readonly string MainAudioClass_Construct = string.Join(' ', new string[] {
                 "48 89 5c 24 ??"                        , // MOV [rsp+0x08], rbx
                 "48 89 6c 24 ??"                        , // MOV [rsp+0x10], rbp
-                "48 89 74 24 ??"                        , // MOV [rsp+0x18], rsi
+                "48 89 4c 24 ??"                        , // MOV [rsp+0x18], rsi
+                "56"                                    , // PUSH rsi
                 "57"                                    , // PUSH rdi
+                "41 54"                                 , // PUSH r12
                 "41 56"                                 , // PUSH r14
                 "41 57"                                 , // PUSH r15
                 "48 83 ec ??"                           , // SUB rsp, 0x20
-                "41 0f b6 f8"                           , // MOVZX edi, r8l
-                "0f b6 f2"                              , // MOVZX esi, dl
-                "4c 8b f1"                              , // MOV r14, rcx
+                "41 0f b6 d8"                           , // MOVZX edi, r8b
+                "0f b6 fa"                              , // MOVZX rsi, dl
+                "48 8b f1"                              , // MOV rsi, rcx
             });
 
             internal static readonly string MainAudioClass_Initialize = string.Join(' ', new string[] {
@@ -131,7 +135,7 @@ namespace ResetAudio {
         private readonly string SlashCommand = "/resetaudio";
         private readonly string SlashCommandHelpMessage = "Manually trigger game audio reset.\n* /resetaudio (r|reset): Reset audio right now.\n* /resetaudio (h|harder): Completely reloads audio.\n* /resetaudio c|configure: Open ResetAudio configuration window.\n* /resetaudio h|help: Print help message.";
 
-        private readonly DalamudPluginInterface _pluginInterface;
+        private readonly IDalamudPluginInterface _pluginInterface;
         private readonly ICommandManager _commandManager;
         private readonly IChatGui _chatGui;
         private readonly IFramework _framework;
@@ -183,13 +187,13 @@ namespace ResetAudio {
         private Task? _resetAudioSoonTask;
 
         public Plugin(
-            [RequiredVersion("1.0")] DalamudPluginInterface pluginInterface,
-            [RequiredVersion("1.0")] ICommandManager commandManager,
-            [RequiredVersion("1.0")] IClientState clientState,
-            [RequiredVersion("1.0")] IChatGui chatGui,
-            [RequiredVersion("1.0")] IFramework framework,
-            [RequiredVersion("1.0")] IPluginLog pluginLog,
-            [RequiredVersion("1.0")] ISigScanner sigScanner) {
+            IDalamudPluginInterface pluginInterface,
+            ICommandManager commandManager,
+            IClientState clientState,
+            IChatGui chatGui,
+            IFramework framework,
+            IPluginLog pluginLog,
+            ISigScanner sigScanner) {
             try {
                 _pluginInterface = pluginInterface;
                 _commandManager = commandManager;

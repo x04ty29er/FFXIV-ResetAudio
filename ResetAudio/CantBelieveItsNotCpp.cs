@@ -358,7 +358,7 @@ namespace ResetAudio {
                 return name;
 
             } catch (Exception ex) {
-                PluginLog.Error(ex, "PropertyKeyToName({0}) failure", propKey);
+                //PluginLog.Error(ex, "PropertyKeyToName({0}) failure", propKey);
                 return null;
             }
         }
