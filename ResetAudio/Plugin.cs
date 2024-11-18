@@ -626,7 +626,7 @@ namespace ResetAudio {
         }
 
         private int OnPropertyValueChanged(IMMNotificationClientVtbl* pNotificationClient, string deviceId, PropertyKey propertyKey) {
-            _pluginLog.Information("OnPropertyValueChanged({0}, {1})", GetDeviceFriendlyName(deviceId), PropertyKeyToName(propertyKey) ?? propertyKey.ToString());
+            _pluginLog.Information("OnPropertyValueChanged({0}, {1})", GetDeviceFriendlyName(deviceId), PropertyKeyToName(propertyKey, _pluginLog) ?? propertyKey.ToString());
 
             if (IsDefaultRenderDevice(deviceId)) {
                 _propertyUpdateCount[propertyKey] = _propertyUpdateCount.GetValueOrDefault(propertyKey, 0) + 1;

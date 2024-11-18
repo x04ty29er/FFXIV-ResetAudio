@@ -1,4 +1,5 @@
 ﻿using Dalamud.Logging;
+using Dalamud.Plugin.Services;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -348,7 +349,7 @@ namespace ResetAudio {
             return (T?)obj;
         }
 
-        public static string? PropertyKeyToName(PropertyKey propKey) {
+        public static string? PropertyKeyToName(PropertyKey propKey, IPluginLog pluginLog) {
             try {
                 if (0 > PSGetNameFromPropertyKey(ref propKey, out var ptr))
                     return null;
@@ -358,7 +359,7 @@ namespace ResetAudio {
                 return name;
 
             } catch (Exception ex) {
-                //PluginLog.Error(ex, "PropertyKeyToName({0}) failure", propKey);
+                pluginLog.Error(ex, "PropertyKeyToName({0}) failure", propKey);
                 return null;
             }
         }
