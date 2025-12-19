@@ -1,4 +1,5 @@
-﻿using Dalamud.Game;
+﻿using Dalamud.Bindings.ImGui;
+using Dalamud.Game;
 using Dalamud.Hooking;
 using Dalamud.Interface.Utility;
 using Dalamud.IoC;
@@ -6,7 +7,7 @@ using Dalamud.Plugin;
 using Dalamud.Plugin.Ipc;
 using Dalamud.Plugin.Ipc.Exceptions;
 using Dalamud.Plugin.Services;
-using ImGuiNET;
+using FFXIVClientStructs.FFXIV.Client;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -85,6 +86,9 @@ namespace ResetAudio {
                 "48 8b f1"                              , // MOV rsi, rcx
             });
 
+
+            // The constructor above is called from XIVClientStructs label Client::System::Framework::Framework.Setup
+            // there is a call to some config function after, then the call to the below function.
             internal static readonly string MainAudioClass_Initialize = string.Join(' ', new string[] {
                 "48 89 5c 24 ??"                        , // MOV [rsp+0x10], rbx
                 "55"                                    , // PUSH rbp
